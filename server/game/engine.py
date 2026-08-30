@@ -27,15 +27,36 @@ def _default_roll(n: int) -> list[int]:
 
 def create_game(
     *,
-    human_id: str,
-    human_name: str,
+    human_id: str | None = None,
+    human_name: str | None = None,
+    humans: list[tuple[str, str]] | None = None,
     bot_count: int = 1,
     config: GameConfig | None = None,
+    owner_user_id: str | None = None,
+    room_code: str | None = None,
 ) -> GameState:
-    bot_count = max(1, min(3, bot_count))
+    """Create a game with one or more humans and 0–3 bots.
+
+    Solo convenience: pass ``human_id`` / ``human_name`` (bots clamped to 1–3).
+    Multiplayer: pass ``humans=[(id, name), ...]`` and ``bot_count`` 0–3.
+    """
+    if humans is None:
+        if not human_id:
+            raise ValueError("human_id or humans required")
+        humans = [(human_id, human_name or "Игрок")]
+        bot_count = max(1, min(3, bot_count))
+    else:
+        if not humans:
+            raise ValueError("Нужен хотя бы один человек")
+        bot_count = max(0, min(3, bot_count))
+
+    if len(humans) + bot_count < 2:
+        raise ValueError("Нужно минимум 2 участника (люди + боты)")
+
     cfg = config or GameConfig()
     players: list[PlayerState] = [
-        PlayerState(id=human_id, name=human_name or "Игрок", kind=PlayerKind.HUMAN)
+        PlayerState(id=uid, name=name or "Игрок", kind=PlayerKind.HUMAN)
+        for uid, name in humans
     ]
     bot_names = ["Бот Алекс", "Бот Маша", "Бот Игорь"]
     for i in range(bot_count):
@@ -47,17 +68,19 @@ def create_game(
             )
         )
 
+    host_id = owner_user_id or humans[0][0]
     state = GameState(
         id=str(uuid.uuid4()),
         config=cfg,
         players=players,
-        owner_user_id=human_id,
+        owner_user_id=host_id,
+        room_code=room_code,
         turn=TurnState(remaining_dice=cfg.dice_count, must_roll=True),
         events=[
             GameEvent(
                 type="game_start",
                 message=f"Игра началась! Игроков: {len(players)}",
-                data={"bot_count": bot_count},
+                data={"bot_count": bot_count, "humans": len(humans)},
             )
         ],
     )
@@ -261,13 +284,17 @@ def create_game_engine(
     bot_count: int = 1,
     config: GameConfig | None = None,
     roll_fn: RollFn | None = None,
+    humans: list[tuple[str, str]] | None = None,
+    owner_user_id: str | None = None,
 ) -> GameEngine:
     return GameEngine(
         create_game(
             human_id=human_id,
             human_name=human_name,
+            humans=humans,
             bot_count=bot_count,
             config=config,
+            owner_user_id=owner_user_id,
         ),
         roll_fn=roll_fn,
     )

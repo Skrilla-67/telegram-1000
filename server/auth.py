@@ -63,6 +63,7 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
 def get_current_user(
     x_telegram_init_data: str | None = Header(default=None),
     x_dev_user: str | None = Header(default=None),
+    x_dev_user_id: str | None = Header(default=None),
 ) -> TelegramUser:
     if x_telegram_init_data:
         if not settings.bot_token and not settings.dev_mode:
@@ -75,7 +76,7 @@ def get_current_user(
                 pairs = dict(parse_qsl(x_telegram_init_data, keep_blank_values=True))
                 user = json.loads(pairs.get("user") or "{}")
                 return TelegramUser(
-                    id=str(user.get("id") or "dev"),
+                    id=str(user.get("id") or x_dev_user_id or "dev"),
                     first_name=user.get("first_name") or "Dev",
                     last_name=user.get("last_name"),
                     username=user.get("username"),
@@ -85,6 +86,6 @@ def get_current_user(
 
     if settings.dev_mode:
         name = x_dev_user or "Dev Player"
-        return TelegramUser(id="dev-user", first_name=name)
+        return TelegramUser(id=x_dev_user_id or "dev-user", first_name=name)
 
     raise HTTPException(status_code=401, detail="Telegram authorization required")
