@@ -109,13 +109,16 @@ if WEB_DIST.is_dir():
 
 
 def run() -> None:
+    import os
+
     import uvicorn
 
+    port = int(os.environ.get("PORT", settings.api_port))
     uvicorn.run(
         "server.main:app",
         host=settings.api_host,
-        port=settings.api_port,
-        reload=settings.dev_mode,
+        port=port,
+        reload=settings.dev_mode and "PORT" not in os.environ,
     )
 
 

@@ -7,13 +7,30 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Кости 1000</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- async: не блокируем отрисовку, если telegram.org недоступен из браузера -->
+    <script src="https://telegram.org/js/telegram-web-app.js" async></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
       rel="stylesheet"
     />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #132820;
+        color: #f3efe6;
+        font-family: system-ui, sans-serif;
+      }
+      #root:empty::before {
+        content: "Загрузка…";
+        display: block;
+        padding: 2rem 1.1rem;
+        opacity: 0.7;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
