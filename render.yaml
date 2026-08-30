@@ -1,4 +1,4 @@
-# Render Blueprint for Кости 1000
+# Render Blueprint for РљРѕСЃС‚Рё 1000
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
@@ -9,7 +9,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       cd web && npm install && npm run build
-    startCommand: uvicorn server.main:app --host 0.0.0.0 --port $PORT
+    startCommand: python -m server.main
     healthCheckPath: /api/health
     envVars:
       - key: DEV_MODE

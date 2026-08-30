@@ -50,7 +50,7 @@ def _require_member(state: GameState, user: TelegramUser) -> None:
         return
     if settings.dev_mode and state.owner_user_id == user.id:
         return
-    raise HTTPException(status_code=403, detail="Вы не в этой игре")
+    raise HTTPException(status_code=403, detail="Р’С‹ РЅРµ РІ СЌС‚РѕР№ РёРіСЂРµ")
 
 
 @app.get("/api/health")
@@ -65,9 +65,9 @@ def create_game_endpoint(
 ) -> GameState:
     # Solo vs bots if max_humans==1; otherwise lobby for friends (+ optional bots).
     if body.max_humans == 1 and body.bots < 1:
-        raise HTTPException(status_code=400, detail="Для одиночной игры нужен хотя бы 1 бот")
+        raise HTTPException(status_code=400, detail="Р”Р»СЏ РѕРґРёРЅРѕС‡РЅРѕР№ РёРіСЂС‹ РЅСѓР¶РµРЅ С…РѕС‚СЏ Р±С‹ 1 Р±РѕС‚")
     if body.bots + body.max_humans < 2:
-        raise HTTPException(status_code=400, detail="Нужно минимум 2 участника суммарно")
+        raise HTTPException(status_code=400, detail="РќСѓР¶РЅРѕ РјРёРЅРёРјСѓРј 2 СѓС‡Р°СЃС‚РЅРёРєР° СЃСѓРјРјР°СЂРЅРѕ")
 
     state = create_game(
         human_id=user.id,
@@ -86,7 +86,7 @@ def join_game_endpoint(
 ) -> GameState:
     state = store.find_by_invite_code(body.code)
     if state is None:
-        raise HTTPException(status_code=404, detail="Комната не найдена")
+        raise HTTPException(status_code=404, detail="РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
     try:
         state = join_game(state, user_id=user.id, user_name=user.display_name)
     except ValueError as exc:
@@ -102,7 +102,7 @@ def start_game_endpoint(
 ) -> GameState:
     state = store.get(game_id)
     if state is None:
-        raise HTTPException(status_code=404, detail="Игра не найдена")
+        raise HTTPException(status_code=404, detail="РРіСЂР° РЅРµ РЅР°Р№РґРµРЅР°")
     try:
         state = start_game(state, user_id=user.id)
     except ValueError as exc:
@@ -118,7 +118,7 @@ def get_game(
 ) -> GameState:
     state = store.get(game_id)
     if state is None:
-        raise HTTPException(status_code=404, detail="Игра не найдена")
+        raise HTTPException(status_code=404, detail="РРіСЂР° РЅРµ РЅР°Р№РґРµРЅР°")
     _require_member(state, user)
     return state
 
@@ -131,11 +131,11 @@ def game_action(
 ) -> GameState:
     state = store.get(game_id)
     if state is None:
-        raise HTTPException(status_code=404, detail="Игра не найдена")
+        raise HTTPException(status_code=404, detail="РРіСЂР° РЅРµ РЅР°Р№РґРµРЅР°")
     _require_member(state, user)
 
     if state.status != GameStatus.PLAYING:
-        raise HTTPException(status_code=400, detail="Игра ещё не идёт")
+        raise HTTPException(status_code=400, detail="РРіСЂР° РµС‰С‘ РЅРµ РёРґС‘С‚")
 
     engine = GameEngine(state)
     try:
@@ -159,15 +159,20 @@ if WEB_DIST.is_dir():
 
 def run() -> None:
     import os
+    import sys
 
     import uvicorn
 
     port = int(os.environ.get("PORT", settings.api_port))
+    host = os.environ.get("API_HOST", settings.api_host) or "0.0.0.0"
+    print(f"Starting uvicorn on {host}:{port}", flush=True)
+    sys.stdout.flush()
     uvicorn.run(
         "server.main:app",
-        host=settings.api_host,
+        host=host,
         port=port,
-        reload=settings.dev_mode and "PORT" not in os.environ,
+        reload=False,
+        log_level="info",
     )
 
 
