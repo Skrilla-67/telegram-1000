@@ -5,7 +5,7 @@ services:
     name: telegram-1000-web
     runtime: python
     plan: free
-    branch: cursor/dice-1000-mini-app
+    branch: master
     buildCommand: |
       pip install -r requirements.txt
       cd web && npm install && npm run build
@@ -27,7 +27,7 @@ services:
     name: telegram-1000-bot
     runtime: python
     plan: free
-    branch: cursor/dice-1000-mini-app
+    branch: master
     buildCommand: pip install -r requirements.txt
     startCommand: python -m bot
     envVars:
