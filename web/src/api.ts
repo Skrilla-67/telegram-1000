@@ -1,18 +1,20 @@
-import type { GameState, RoomView } from "./types";
+import type { GameState } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 function authHeaders(): HeadersInit {
   const tg = window.Telegram?.WebApp;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (tg?.initData) {
     headers["X-Telegram-Init-Data"] = tg.initData;
   } else {
-    const params = new URLSearchParams(window.location.search);
-    headers["X-Dev-User"] = params.get("devName") || "Dev Player";
-    headers["X-Dev-User-Id"] = params.get("devId") || "dev-user";
+    let id = localStorage.getItem("dev_user_id");
+    if (!id) {
+      id = `dev-${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem("dev_user_id", id);
+    }
+    headers["X-Dev-User"] = localStorage.getItem("dev_user_name") || "Dev Player";
+    headers["X-Dev-User-Id"] = id;
   }
   return headers;
 }
@@ -35,51 +37,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function createGame(bots: number): Promise<GameState> {
-  return request<GameState>("/api/games", {
-    method: "POST",
-    body: JSON.stringify({ bots }),
-  });
+export function currentUserId(): string {
+  const uid = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (uid) return String(uid);
+  return localStorage.getItem("dev_user_id") || "dev-user";
 }
 
-export function getGame(id: string): Promise<GameState> {
-  return request<GameState>(`/api/games/${id}`);
-}
-
-export function sendAction(id: string, type: "roll" | "bank"): Promise<GameState> {
-  return request<GameState>(`/api/games/${id}/actions`, {
-    method: "POST",
-    body: JSON.stringify({ type }),
-  });
-}
-
-export function createRoom(bots: number, maxHumans: number): Promise<RoomView> {
-  return request<RoomView>("/api/rooms", {
+export function createGame(bots: number, maxHumans = 1): Promise<GameState> {
+  return request("/api/games", {
     method: "POST",
     body: JSON.stringify({ bots, max_humans: maxHumans }),
   });
 }
 
-export function joinRoom(code: string): Promise<RoomView> {
-  return request<RoomView>(`/api/rooms/${encodeURIComponent(code.trim().toUpperCase())}/join`, {
+export function joinGame(code: string): Promise<GameState> {
+  return request("/api/games/join", {
     method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
 
-export function startRoom(code: string): Promise<RoomView> {
-  return request<RoomView>(`/api/rooms/${encodeURIComponent(code)}/start`, {
+export function startGame(id: string): Promise<GameState> {
+  return request(`/api/games/${id}/start`, { method: "POST" });
+}
+
+export function getGame(id: string): Promise<GameState> {
+  return request(`/api/games/${id}`);
+}
+
+export function sendAction(id: string, type: "roll" | "bank"): Promise<GameState> {
+  return request(`/api/games/${id}/actions`, {
     method: "POST",
+    body: JSON.stringify({ type }),
   });
-}
-
-export function getRoom(code: string): Promise<RoomView> {
-  return request<RoomView>(`/api/rooms/${encodeURIComponent(code)}`);
-}
-
-export function currentUserId(): string {
-  const tg = window.Telegram?.WebApp;
-  const fromTg = tg?.initDataUnsafe?.user?.id;
-  if (fromTg != null) return String(fromTg);
-  const params = new URLSearchParams(window.location.search);
-  return params.get("devId") || "dev-user";
 }
