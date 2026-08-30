@@ -9,6 +9,7 @@ interface TelegramWebApp {
       last_name?: string;
       username?: string;
     };
+    start_param?: string;
   };
   ready: () => void;
   expand: () => void;

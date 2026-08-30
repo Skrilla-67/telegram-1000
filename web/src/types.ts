@@ -1,5 +1,6 @@
 export type PlayerKind = "human" | "bot";
 export type Phase = "waiting_roll" | "waiting_decision" | "finished";
+export type RoomStatus = "lobby" | "playing" | "finished";
 
 export interface PlayerState {
   id: string;
@@ -38,10 +39,28 @@ export interface GameState {
   events: GameEvent[];
   winner_id: string | null;
   owner_user_id: string | null;
+  room_code?: string | null;
   config: {
     open_threshold: number;
     barrel_threshold: number;
     win_score: number;
     pits: [number, number][];
   };
+}
+
+export interface RoomSeat {
+  user_id: string;
+  name: string;
+}
+
+export interface RoomView {
+  code: string;
+  status: RoomStatus;
+  host_id: string;
+  max_humans: number;
+  bots: number;
+  seats: RoomSeat[];
+  game_id: string | null;
+  game: GameState | null;
+  you_are_host: boolean;
 }

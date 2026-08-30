@@ -1,4 +1,4 @@
-import type { GameState } from "./types";
+import type { GameState, RoomView } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -10,7 +10,9 @@ function authHeaders(): HeadersInit {
   if (tg?.initData) {
     headers["X-Telegram-Init-Data"] = tg.initData;
   } else {
-    headers["X-Dev-User"] = "Dev Player";
+    const params = new URLSearchParams(window.location.search);
+    headers["X-Dev-User"] = params.get("devName") || "Dev Player";
+    headers["X-Dev-User-Id"] = params.get("devId") || "dev-user";
   }
   return headers;
 }
@@ -49,4 +51,35 @@ export function sendAction(id: string, type: "roll" | "bank"): Promise<GameState
     method: "POST",
     body: JSON.stringify({ type }),
   });
+}
+
+export function createRoom(bots: number, maxHumans: number): Promise<RoomView> {
+  return request<RoomView>("/api/rooms", {
+    method: "POST",
+    body: JSON.stringify({ bots, max_humans: maxHumans }),
+  });
+}
+
+export function joinRoom(code: string): Promise<RoomView> {
+  return request<RoomView>(`/api/rooms/${encodeURIComponent(code.trim().toUpperCase())}/join`, {
+    method: "POST",
+  });
+}
+
+export function startRoom(code: string): Promise<RoomView> {
+  return request<RoomView>(`/api/rooms/${encodeURIComponent(code)}/start`, {
+    method: "POST",
+  });
+}
+
+export function getRoom(code: string): Promise<RoomView> {
+  return request<RoomView>(`/api/rooms/${encodeURIComponent(code)}`);
+}
+
+export function currentUserId(): string {
+  const tg = window.Telegram?.WebApp;
+  const fromTg = tg?.initDataUnsafe?.user?.id;
+  if (fromTg != null) return String(fromTg);
+  const params = new URLSearchParams(window.location.search);
+  return params.get("devId") || "dev-user";
 }
