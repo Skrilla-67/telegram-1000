@@ -5,14 +5,15 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from server.config import settings
-from server.game.engine import create_game
-from server.game.models import PlayerKind
+from server.game.engine import create_game, join_game, start_game
+from server.game.models import GameStatus, PlayerKind
 from server.main import app
 from server.store import GameStore
 
 
 def _client(tmp_path: Path) -> TestClient:
     settings.data_dir = str(tmp_path)
+    settings.dev_mode = True
     import server.main as main_mod
     import server.store as store_mod
 
@@ -30,68 +31,59 @@ def _headers(user_id: str, name: str) -> dict[str, str]:
 
 
 def test_create_join_start_room(tmp_path: Path):
-    settings.dev_mode = True
     client = _client(tmp_path)
 
     r = client.post(
-        "/api/rooms",
+        "/api/games",
         json={"bots": 1, "max_humans": 2},
         headers=_headers("host1", "Host"),
     )
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     room = r.json()
-    code = room["code"]
+    code = room["invite_code"]
     assert room["status"] == "lobby"
-    assert room["you_are_host"] is True
-    assert len(room["seats"]) == 1
+    assert room["owner_user_id"] == "host1"
+    assert len(room["players"]) == 2  # host + 1 bot
 
     r2 = client.post(
-        f"/api/rooms/{code}/join",
+        "/api/games/join",
+        json={"code": code},
         headers=_headers("guest1", "Guest"),
     )
-    assert r2.status_code == 200
+    assert r2.status_code == 200, r2.text
     joined = r2.json()
-    assert len(joined["seats"]) == 2
-    assert joined["you_are_host"] is False
+    humans = [p for p in joined["players"] if p["kind"] == "human"]
+    assert len(humans) == 2
 
     bad = client.post(
-        f"/api/rooms/{code}/start",
+        f"/api/games/{joined['id']}/start",
         headers=_headers("guest1", "Guest"),
     )
-    assert bad.status_code == 403
+    assert bad.status_code == 400
 
     started = client.post(
-        f"/api/rooms/{code}/start",
+        f"/api/games/{joined['id']}/start",
         headers=_headers("host1", "Host"),
     )
-    assert started.status_code == 200
+    assert started.status_code == 200, started.text
     body = started.json()
     assert body["status"] == "playing"
-    assert body["game"] is not None
-    humans = [p for p in body["game"]["players"] if p["kind"] == "human"]
-    bots = [p for p in body["game"]["players"] if p["kind"] == "bot"]
-    assert len(humans) == 2
-    assert len(bots) == 1
+    assert sum(1 for p in body["players"] if p["kind"] == "human") == 2
+    assert sum(1 for p in body["players"] if p["kind"] == "bot") == 1
 
 
-def test_non_owner_human_can_act(tmp_path: Path):
-    settings.dev_mode = True
+def test_guest_can_act_on_their_turn(tmp_path: Path):
     client = _client(tmp_path)
 
     r = client.post(
-        "/api/rooms",
+        "/api/games",
         json={"bots": 0, "max_humans": 2},
         headers=_headers("host1", "Host"),
     )
-    code = r.json()["code"]
-    client.post(f"/api/rooms/{code}/join", headers=_headers("guest1", "Guest"))
-    started = client.post(
-        f"/api/rooms/{code}/start",
-        headers=_headers("host1", "Host"),
-    )
-    game = started.json()["game"]
-    game_id = game["id"]
-    assert game["players"][0]["id"] == "host1"
+    code = r.json()["invite_code"]
+    game_id = r.json()["id"]
+    client.post("/api/games/join", json={"code": code}, headers=_headers("guest1", "Guest"))
+    client.post(f"/api/games/{game_id}/start", headers=_headers("host1", "Host"))
 
     import server.main as main_mod
     from server.game.models import Phase, TurnState
@@ -109,9 +101,7 @@ def test_non_owner_human_can_act(tmp_path: Path):
         headers=_headers("guest1", "Guest"),
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["players"][1]["id"] == "guest1"
 
-    # Ownership must not block host with 403; wrong-turn is 400.
     host_try = client.post(
         f"/api/games/{game_id}/actions",
         json={"type": "bank"},
@@ -121,22 +111,27 @@ def test_non_owner_human_can_act(tmp_path: Path):
     assert host_try.status_code != 403
 
 
-def test_create_game_multi_humans_zero_bots():
+def test_create_game_lobby_zero_bots():
     state = create_game(
-        humans=[("a", "A"), ("b", "B")],
+        human_id="a",
+        human_name="A",
         bot_count=0,
-        owner_user_id="a",
+        max_humans=2,
     )
-    assert len(state.players) == 2
+    assert state.status == GameStatus.LOBBY
+    assert len(state.players) == 1
+    join_game(state, user_id="b", user_name="B")
+    assert state.human_count() == 2
+    start_game(state, user_id="a")
+    assert state.status == GameStatus.PLAYING
     assert all(p.kind == PlayerKind.HUMAN for p in state.players)
-    assert state.owner_user_id == "a"
 
 
-def test_solo_still_requires_bots(tmp_path: Path):
-    settings.dev_mode = True
+def test_solo_still_works(tmp_path: Path):
     client = _client(tmp_path)
     r = client.post("/api/games", json={"bots": 2}, headers=_headers("solo", "Solo"))
     assert r.status_code == 200
-    players = r.json()["players"]
-    assert sum(1 for p in players if p["kind"] == "human") == 1
-    assert sum(1 for p in players if p["kind"] == "bot") == 2
+    body = r.json()
+    assert body["status"] == "playing"
+    assert sum(1 for p in body["players"] if p["kind"] == "human") == 1
+    assert sum(1 for p in body["players"] if p["kind"] == "bot") == 2
