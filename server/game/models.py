@@ -11,6 +11,12 @@ class PlayerKind(str, Enum):
     BOT = "bot"
 
 
+class GameStatus(str, Enum):
+    LOBBY = "lobby"
+    PLAYING = "playing"
+    FINISHED = "finished"
+
+
 class Phase(str, Enum):
     WAITING_ROLL = "waiting_roll"
     WAITING_DECISION = "waiting_decision"
@@ -62,15 +68,23 @@ class GameEvent(BaseModel):
 
 class GameState(BaseModel):
     id: str
+    invite_code: str = ""
+    status: GameStatus = GameStatus.PLAYING
     config: GameConfig = Field(default_factory=GameConfig)
     players: list[PlayerState]
+    max_humans: int = 1
     current_player_index: int = 0
     phase: Phase = Phase.WAITING_ROLL
     turn: TurnState = Field(default_factory=TurnState)
     events: list[GameEvent] = Field(default_factory=list)
     winner_id: str | None = None
     owner_user_id: str | None = None
-    room_code: str | None = None
 
     def current_player(self) -> PlayerState:
         return self.players[self.current_player_index]
+
+    def human_count(self) -> int:
+        return sum(1 for p in self.players if p.kind == PlayerKind.HUMAN)
+
+    def has_player(self, player_id: str) -> bool:
+        return any(p.id == player_id for p in self.players)
