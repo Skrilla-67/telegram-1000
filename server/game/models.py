@@ -70,6 +70,7 @@ class GameState(BaseModel):
     events: list[GameEvent] = Field(default_factory=list)
     winner_id: str | None = None
     owner_user_id: str | None = None
+    room_code: str | None = None
 
     def current_player(self) -> PlayerState:
         return self.players[self.current_player_index]
