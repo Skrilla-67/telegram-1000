@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +27,7 @@ logger = logging.getLogger("server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_web_dist()
     bot_task: asyncio.Task | None = None
     if settings.bot_token:
         from bot.main import run_bot
@@ -61,6 +64,23 @@ app.add_middleware(
 )
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _ensure_web_dist() -> None:
+    index = WEB_DIST / "index.html"
+    if index.is_file():
+        return
+    script = ROOT / "scripts" / "render-build.sh"
+    if not script.is_file():
+        logger.warning("web/dist missing and scripts/render-build.sh not found")
+        return
+    logger.warning("web/dist missing — building frontend at startup")
+    env = os.environ.copy()
+    env["SKIP_PIP"] = "1"
+    subprocess.run(["bash", str(script)], cwd=ROOT, check=True, env=env, timeout=900)
+
 
 
 class CreateGameRequest(BaseModel):
@@ -314,6 +334,13 @@ def game_action(
 assets_dir = WEB_DIST / "assets"
 if assets_dir.is_dir():
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
+@app.head("/")
+def spa_index_head():
+    if (WEB_DIST / "index.html").is_file():
+        return Response(status_code=200)
+    return Response(status_code=503)
 
 
 @app.get("/")
