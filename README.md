@@ -97,3 +97,13 @@ server/        FastAPI + игровой движок
 web/           Mini App
 data/          сохранённые партии (создаётся автоматически)
 ```
+
+
+## Telegram: Main Mini App + Login Widget
+
+1. [@BotFather](https://t.me/BotFather) → Bot Settings → **Configure Mini App** / **Main Mini App** → URL = `WEBAPP_URL`.
+2. Bot Settings → **Menu Button** → Configure menu button → Web App URL = `WEBAPP_URL` (код также выставляет menu button при старте).
+3. BotFather → `/setdomain` → домен вашего `WEBAPP_URL` (нужен для **Login Widget** на сайте).
+4. Env на Render: `BOT_TOKEN`, `BOT_USERNAME` (без `@`), `WEBAPP_URL`.
+
+Профили пишутся в `data/users/`, история партий — в `data/history/`. На free Render диск эфемерный: после рестарта данные могут пропасть (для продакшена нужен Disk/БД).

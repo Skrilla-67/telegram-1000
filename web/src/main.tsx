@@ -5,8 +5,17 @@ import "./styles.css";
 
 function bootTelegram() {
   const tg = window.Telegram?.WebApp;
-  tg?.ready();
-  tg?.expand();
+  if (!tg) return;
+  tg.ready();
+  tg.expand();
+  tg.enableClosingConfirmation?.();
+  tg.disableVerticalSwipes?.();
+  // Main Mini App capabilities: write access helps bot features / shared chat tools.
+  try {
+    tg.requestWriteAccess?.(() => undefined);
+  } catch {
+    /* older clients */
+  }
 }
 
 function mount() {
@@ -18,7 +27,6 @@ function mount() {
   );
 }
 
-// Если SDK ещё грузится (async), подождём коротко; иначе сразу монтируем UI.
 if (window.Telegram?.WebApp) {
   mount();
 } else {

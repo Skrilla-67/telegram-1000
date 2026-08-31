@@ -11,11 +11,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .auth import TelegramUser, get_current_user
+from .auth import TelegramUser, get_current_user, issue_session_token, validate_login_widget, persist_user
 from .config import settings
 from .game.engine import GameEngine, create_game, join_game, start_game
 from .game.models import GameState, GameStatus
 from .store import store
+from .history import history
+from .users import users
 
 logger = logging.getLogger("server")
 
@@ -81,10 +83,93 @@ def _require_member(state: GameState, user: TelegramUser) -> None:
     raise HTTPException(status_code=403, detail="Р’С‹ РЅРµ РІ СЌС‚РѕР№ РёРіСЂРµ")
 
 
+
+def _maybe_archive(state: GameState) -> None:
+    if state.status != GameStatus.FINISHED:
+        return
+    if history.exists(state.id):
+        return
+    history.archive(state)
+    for p in state.players:
+        if p.kind.value == "human":
+            users.record_game_result(p.id, won=(p.id == state.winner_id))
+
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "dev_mode": settings.dev_mode}
+    return {
+        "ok": True,
+        "dev_mode": settings.dev_mode,
+        "bot_username": settings.bot_username or None,
+        "webapp_url": settings.webapp_url,
+    }
 
+
+class LoginWidgetPayload(BaseModel):
+    id: int
+    first_name: str
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    auth_date: int
+    hash: str
+
+
+class ClientMetaPayload(BaseModel):
+    platform: str | None = None
+    tg_version: str | None = None
+    color_scheme: str | None = None
+    phone_number: str | None = None
+    allows_write_to_pm: bool | None = None
+    extra: dict | None = None
+
+
+@app.get("/api/config")
+def public_config() -> dict:
+    return {
+        "bot_username": settings.bot_username or "",
+        "webapp_url": settings.webapp_url,
+        "dev_mode": settings.dev_mode,
+    }
+
+
+@app.post("/api/auth/telegram")
+def auth_telegram_login(body: LoginWidgetPayload) -> dict:
+    if not settings.bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN not configured")
+    try:
+        user = validate_login_widget(body.model_dump(), settings.bot_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    persist_user(user, source="login_widget")
+    token = issue_session_token(user)
+    profile = users.get(user.id)
+    return {"token": token, "user": profile.model_dump() if profile else user.to_profile_patch()}
+
+
+@app.post("/api/me/ping")
+def me_ping(
+    body: ClientMetaPayload | None = None,
+    user: TelegramUser = Depends(get_current_user),
+) -> dict:
+    meta = body.model_dump(exclude_none=True) if body else {}
+    persist_user(user, source="ping", client_meta=meta)
+    profile = users.get(user.id)
+    return profile.model_dump() if profile else user.to_profile_patch()
+
+
+@app.get("/api/me")
+def me(user: TelegramUser = Depends(get_current_user)) -> dict:
+    profile = users.get(user.id)
+    if profile is None:
+        persist_user(user, source="me")
+        profile = users.get(user.id)
+    assert profile is not None
+    return profile.model_dump()
+
+
+@app.get("/api/me/history")
+def me_history(user: TelegramUser = Depends(get_current_user)) -> dict:
+    return {"items": [h.model_dump() for h in history.list_for_user(user.id)]}
 
 @app.post("/api/games", response_model=GameState)
 def create_game_endpoint(
@@ -104,6 +189,7 @@ def create_game_endpoint(
         max_humans=body.max_humans,
     )
     store.save(state)
+    _maybe_archive(state)
     return state
 
 
@@ -120,6 +206,7 @@ def join_game_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.save(state)
+    _maybe_archive(state)
     return state
 
 
@@ -136,6 +223,7 @@ def start_game_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.save(state)
+    _maybe_archive(state)
     return state
 
 
@@ -172,6 +260,7 @@ def game_action(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     store.save(new_state)
+    _maybe_archive(new_state)
     return new_state
 
 

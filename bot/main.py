@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
-from aiogram.types import Message, WebAppInfo
+from aiogram.types import MenuButtonWebApp, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +86,13 @@ async def run_bot() -> None:
     bot = Bot(token=settings.bot_token)
     dp = build_dispatcher(bot)
     await bot.delete_webhook(drop_pending_updates=False)
+    # Main Mini App / menu button — enable Main App also in BotFather.
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="Играть",
+            web_app=WebAppInfo(url=settings.webapp_url.rstrip("/")),
+        )
+    )
     logger.info("Bot starting. WEBAPP_URL=%s", settings.webapp_url)
     await dp.start_polling(bot)
 

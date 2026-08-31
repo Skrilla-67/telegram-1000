@@ -491,3 +491,64 @@ body {
 .code-input:focus {
   border-color: var(--tg-button, var(--accent));
 }
+
+
+.auth-panel {
+  margin: 0 0 1.25rem;
+}
+
+.auth-card {
+  padding: 1rem 1.05rem;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tg-secondary, #243044) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cream) 12%, transparent);
+}
+
+.auth-card__row {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.auth-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.auth-avatar--ph {
+  background: color-mix(in srgb, var(--accent) 35%, #243044);
+}
+
+.auth-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.auth-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.tg-login-slot {
+  margin-top: 0.75rem;
+  min-height: 40px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+}

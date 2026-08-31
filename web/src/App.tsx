@@ -9,6 +9,7 @@ import {
 } from "./api";
 import { DiceTray } from "./Dice";
 import type { GameState, PlayerState } from "./types";
+import { AuthPanel } from "./AuthPanel";
 
 type Mode = "menu" | "solo" | "create" | "join";
 
@@ -191,6 +192,8 @@ export default function App() {
           <h1>Классика на пять кубиков</h1>
           <p className="lead">Играй с ботами или зови друзей в комнату.</p>
         </header>
+
+        <AuthPanel />
 
         {mode === "menu" && (
           <section className="lobby">
