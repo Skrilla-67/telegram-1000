@@ -102,6 +102,59 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
     return _user_from_telegram_dict(json.loads(user_raw))
 
 
+
+def user_from_id_token_claims(claims: dict[str, Any]) -> TelegramUser:
+    user_id = claims.get("id") or claims.get("sub")
+    if user_id is None:
+        raise ValueError("missing user id in id_token")
+    given = claims.get("given_name")
+    family = claims.get("family_name")
+    full_name = claims.get("name")
+    if not given and full_name:
+        parts = str(full_name).split(" ", 1)
+        given = parts[0]
+        family = parts[1] if len(parts) > 1 else None
+    extra = {
+        k: v
+        for k, v in claims.items()
+        if k
+        not in {
+            "id",
+            "sub",
+            "iss",
+            "aud",
+            "exp",
+            "iat",
+            "given_name",
+            "family_name",
+            "name",
+            "preferred_username",
+            "picture",
+            "phone_number",
+            "phone_number_verified",
+        }
+    }
+    return TelegramUser(
+        id=str(user_id),
+        first_name=str(given or "Player"),
+        last_name=family,
+        username=claims.get("preferred_username"),
+        photo_url=claims.get("picture"),
+        phone_number=claims.get("phone_number"),
+        extra=extra,
+    )
+
+
+def validate_native_id_token(id_token: str, platform: str | None = None) -> TelegramUser:
+    from .telegram_oidc import validate_id_token
+
+    claims = validate_id_token(id_token)
+    user = user_from_id_token_claims(claims)
+    if platform:
+        user.extra["native_platform"] = platform
+    return user
+
+
 def validate_login_widget(data: dict[str, Any], bot_token: str, max_age_seconds: int = 86400) -> TelegramUser:
     """Validate Telegram Login Widget callback payload."""
     payload = {k: str(v) for k, v in data.items() if v is not None and k != "hash"}

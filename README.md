@@ -107,3 +107,15 @@ data/          сохранённые партии (создаётся авто�
 4. Env на Render: `BOT_TOKEN`, `BOT_USERNAME` (без `@`), `WEBAPP_URL`.
 
 Профили пишутся в `data/users/`, история партий — в `data/history/`. На free Render диск эфемерный: после рестарта данные могут пропасть (для продакшена нужен Disk/БД).
+
+
+## Native iOS / Android login
+
+Mobile apps use official SDKs and exchange `idToken` (JWT) with this backend:
+
+- [telegram-login-ios](https://github.com/TelegramMessenger/telegram-login-ios) → `POST /api/auth/native` `{ "id_token": "...", "platform": "ios" }`
+- [telegram-login-android](https://github.com/TelegramMessenger/telegram-login-android) → same with `"android"`
+
+Set `BOT_CLIENT_ID` from BotFather (numeric Client ID). Tokens are verified via Telegram JWKS ([docs](https://core.telegram.org/bots/telegram-login#validating-id-tokens)).
+
+See `mobile/ios/README.md` and `mobile/android/README.md`.

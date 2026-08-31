@@ -11,13 +11,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .auth import TelegramUser, get_current_user, issue_session_token, validate_login_widget, persist_user
+from .auth import TelegramUser, get_current_user, issue_session_token, validate_login_widget, validate_native_id_token, persist_user
 from .config import settings
 from .game.engine import GameEngine, create_game, join_game, start_game
 from .game.models import GameState, GameStatus
 from .store import store
 from .history import history
 from .users import users
+from .telegram_oidc import bot_client_id
 
 logger = logging.getLogger("server")
 
@@ -106,6 +107,16 @@ def health() -> dict:
     }
 
 
+
+class NativeLoginPayload(BaseModel):
+    id_token: str = Field(min_length=20)
+    platform: str | None = Field(default=None, description="ios | android")
+
+
+class OidcLoginPayload(BaseModel):
+    id_token: str = Field(min_length=20)
+
+
 class LoginWidgetPayload(BaseModel):
     id: int
     first_name: str
@@ -129,9 +140,43 @@ class ClientMetaPayload(BaseModel):
 def public_config() -> dict:
     return {
         "bot_username": settings.bot_username or "",
+        "bot_client_id": bot_client_id(),
         "webapp_url": settings.webapp_url,
         "dev_mode": settings.dev_mode,
+        "native_login": {
+            "ios": "https://github.com/TelegramMessenger/telegram-login-ios",
+            "android": "https://github.com/TelegramMessenger/telegram-login-android",
+            "token_endpoint": "/api/auth/native",
+        },
     }
+
+
+
+@app.post("/api/auth/native")
+def auth_native_login(body: NativeLoginPayload) -> dict:
+    """Exchange idToken from telegram-login-ios / telegram-login-android SDK."""
+    try:
+        user = validate_native_id_token(body.id_token, platform=body.platform)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    source = f"native_{body.platform}" if body.platform else "native"
+    persist_user(user, source=source)
+    token = issue_session_token(user)
+    profile = users.get(user.id)
+    return {"token": token, "user": profile.model_dump() if profile else user.to_profile_patch()}
+
+
+@app.post("/api/auth/oidc")
+def auth_oidc_login(body: OidcLoginPayload) -> dict:
+    """Verify OIDC id_token (new oauth.telegram.org Login Widget)."""
+    try:
+        user = validate_native_id_token(body.id_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    persist_user(user, source="oidc_widget")
+    token = issue_session_token(user)
+    profile = users.get(user.id)
+    return {"token": token, "user": profile.model_dump() if profile else user.to_profile_patch()}
 
 
 @app.post("/api/auth/telegram")

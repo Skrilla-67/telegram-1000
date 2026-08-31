@@ -4,6 +4,7 @@ import {
   fetchHistory,
   fetchMe,
   getSessionToken,
+  loginWithOidc,
   loginWithTelegramWidget,
   pingMe,
   setSessionToken,
@@ -19,6 +20,7 @@ declare global {
 export function AuthPanel() {
   const inTelegram = Boolean(window.Telegram?.WebApp?.initData);
   const [botUsername, setBotUsername] = useState("");
+  const [botClientId, setBotClientId] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [history, setHistory] = useState<GameHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -29,6 +31,7 @@ export function AuthPanel() {
       try {
         const cfg = await fetchConfig();
         setBotUsername(cfg.bot_username);
+        setBotClientId(cfg.bot_client_id || "");
       } catch {
         /* ignore */
       }
@@ -49,17 +52,19 @@ export function AuthPanel() {
 
   useEffect(() => {
     if (inTelegram) return;
-    if (!botUsername) return;
+    if (!botClientId && !botUsername) return;
     if (getSessionToken()) return;
 
-    window.onTelegramAuth = (user) => {
+    window.onTelegramAuth = (data) => {
       void (async () => {
         try {
-          const res = await loginWithTelegramWidget(user);
+          const payload = data as Record<string, unknown>;
+          const res = payload.id_token
+            ? await loginWithOidc(String(payload.id_token))
+            : await loginWithTelegramWidget(payload);
           setSessionToken(res.token);
           setProfile(res.user);
           setError(null);
-          // remove widget after login
           const mount = document.getElementById("tg-login-slot");
           if (mount) mount.innerHTML = "";
         } catch (e) {
@@ -70,20 +75,31 @@ export function AuthPanel() {
 
     const slot = document.getElementById("tg-login-slot");
     if (!slot || slot.childElementCount > 0) return;
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "10");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
-    script.setAttribute("data-request-access", "write");
-    slot.appendChild(script);
+
+    if (botClientId) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://oauth.telegram.org/js/telegram-login.js?6";
+      script.setAttribute("data-client-id", botClientId);
+      script.setAttribute("data-onauth", "onTelegramAuth(data)");
+      script.setAttribute("data-request-access", "write phone");
+      slot.appendChild(script);
+    } else {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://telegram.org/js/telegram-widget.js?22";
+      script.setAttribute("data-telegram-login", botUsername);
+      script.setAttribute("data-size", "large");
+      script.setAttribute("data-radius", "10");
+      script.setAttribute("data-onauth", "onTelegramAuth(user)");
+      script.setAttribute("data-request-access", "write");
+      slot.appendChild(script);
+    }
 
     return () => {
       window.onTelegramAuth = undefined;
     };
-  }, [botUsername, inTelegram, profile]);
+  }, [botClientId, botUsername, inTelegram, profile]);
 
   async function loadHistory() {
     setShowHistory(true);

@@ -89,8 +89,16 @@ export function currentUserId(): string {
   return localStorage.getItem("dev_user_id") || "dev-user";
 }
 
-export function fetchConfig(): Promise<{ bot_username: string; webapp_url: string; dev_mode: boolean }> {
+export function fetchConfig(): Promise<{ bot_username: string; bot_client_id: string; webapp_url: string; dev_mode: boolean }> {
   return request("/api/config");
+}
+
+export function loginWithOidc(idToken: string): Promise<{ token: string; user: UserProfile }> {
+  return request("/api/auth/oidc", { method: "POST", body: JSON.stringify({ id_token: idToken }) });
+}
+
+export function loginWithNativeIdToken(idToken: string, platform: "ios" | "android"): Promise<{ token: string; user: UserProfile }> {
+  return request("/api/auth/native", { method: "POST", body: JSON.stringify({ id_token: idToken, platform }) });
 }
 
 export function loginWithTelegramWidget(payload: Record<string, unknown>): Promise<{ token: string; user: UserProfile }> {
