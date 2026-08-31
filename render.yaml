@@ -1,6 +1,5 @@
-# Render Blueprint for Dice 1000
+# Render Blueprint for Кости 1000
 # https://render.com/docs/blueprint-spec
-# Bot polling runs inside the web service (no Background Worker needed).
 services:
   - type: web
     name: telegram-1000-web
@@ -10,7 +9,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       cd web && npm install && npm run build
-    startCommand: python -m server.main
+    startCommand: uvicorn server.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: DEV_MODE
@@ -21,7 +20,22 @@ services:
         sync: false
       - key: WEBAPP_URL
         sync: false
-      - key: BOT_USERNAME
-        sync: false
       - key: CORS_ORIGINS
         value: "*"
+
+  - type: worker
+    name: telegram-1000-bot
+    runtime: python
+    plan: free
+    branch: master
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: DEV_MODE
+        value: "false"

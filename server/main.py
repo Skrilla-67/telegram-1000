@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -101,6 +101,8 @@ def health() -> dict:
         "dev_mode": settings.dev_mode,
         "bot_username": settings.bot_username or None,
         "webapp_url": settings.webapp_url,
+        "web_dist": WEB_DIST.is_dir(),
+        "web_index": (WEB_DIST / "index.html").is_file(),
     }
 
 
@@ -264,14 +266,42 @@ def game_action(
     return new_state
 
 
-if WEB_DIST.is_dir():
-    assets = WEB_DIST / "assets"
-    if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+assets_dir = WEB_DIST / "assets"
+if assets_dir.is_dir():
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/")
-    def spa_index() -> FileResponse:
-        return FileResponse(WEB_DIST / "index.html")
+
+@app.get("/")
+def spa_index():
+    index = WEB_DIST / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8><title>Build missing</title>"
+        "<body style='font-family:sans-serif;background:#132820;color:#f3efe6;padding:2rem'>"
+        "<h1>Frontend not built</h1>"
+        "<p>On Render set Build Command to:</p>"
+        "<pre>pip install -r requirements.txt\n"
+        "cd web &amp;&amp; npm install &amp;&amp; npm run build\n"
+        "test -f dist/index.html</pre>"
+        "<p>Then Manual Deploy. Check <code>/api/health</code> → web_index:true</p>"
+        "</body>",
+        status_code=503,
+    )
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path == "api":
+        raise HTTPException(status_code=404, detail="Not found")
+    index = WEB_DIST / "index.html"
+    if index.is_file():
+        # Prefer real static file if present (e.g. favicon), else SPA shell
+        candidate = WEB_DIST / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
+    raise HTTPException(status_code=404, detail="Frontend not built")
 
 
 def run() -> None:
