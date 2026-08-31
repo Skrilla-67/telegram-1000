@@ -140,6 +140,26 @@ body {
   color: var(--tg-button-text, #1a2332);
 }
 
+
+.menu-actions {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.menu-actions .btn {
+  flex: 1;
+}
+
+.btn--play {
+  background: #d32f2f;
+  color: #ffffff;
+}
+
+.btn--bail {
+  background: #1565c0;
+  color: #ffffff;
+}
+
 .btn--ghost {
   background: transparent;
   color: var(--cream);
@@ -492,6 +512,15 @@ body {
   border-color: var(--tg-button, var(--accent));
 }
 
+
+.auth-gate-hint {
+  margin: 0.5rem 0 1rem;
+}
+
+.widget-hint {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
 
 .auth-panel {
   margin: 0 0 1.25rem;

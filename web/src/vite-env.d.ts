@@ -1,5 +1,28 @@
 /// <reference types="vite/client" />
 
+
+interface TelegramBottomButton {
+  text: string;
+  color?: string;
+  textColor?: string;
+  isVisible?: boolean;
+  isActive?: boolean;
+  setText: (text: string) => TelegramBottomButton;
+  show: () => void;
+  hide: () => void;
+  onClick: (cb: () => void) => void;
+  offClick: (cb: () => void) => void;
+  enable: () => void;
+  disable: () => void;
+  setParams?: (params: {
+    text?: string;
+    color?: string;
+    text_color?: string;
+    is_active?: boolean;
+    is_visible?: boolean;
+  }) => void;
+}
+
 interface TelegramWebAppUser {
   id: number;
   first_name?: string;
@@ -23,13 +46,9 @@ interface TelegramWebApp {
   version?: string;
   themeParams: Record<string, string>;
   colorScheme: "light" | "dark";
-  MainButton: {
-    text: string;
-    show: () => void;
-    hide: () => void;
-    onClick: (cb: () => void) => void;
-    offClick: (cb: () => void) => void;
-  };
+  close: () => void;
+  MainButton: TelegramBottomButton;
+  SecondaryButton?: TelegramBottomButton;
   HapticFeedback?: {
     impactOccurred: (style: string) => void;
     notificationOccurred: (type: string) => void;
@@ -37,6 +56,7 @@ interface TelegramWebApp {
   requestWriteAccess?: (cb?: (granted: boolean) => void) => void;
   requestContact?: (cb?: (granted: boolean, response?: { responseUnsafe?: { contact?: { phone_number?: string } } }) => void) => void;
   enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
   disableVerticalSwipes?: () => void;
 }
 

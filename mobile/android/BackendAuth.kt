@@ -1,5 +1,6 @@
 package com.example.telegram1000.auth
 
+import android.webkit.WebView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -9,7 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 object BackendAuth {
-    private const val API_BASE = "https://telegram-1000-1.onrender.com"
+    private const val API_BASE = "https://telegram-1000-web.onrender.com"
     private val http = OkHttpClient()
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
@@ -48,4 +49,35 @@ object BackendAuth {
             .header("Authorization", "Bearer $sessionToken")
             .get()
             .build()
+
+    /**
+     * Call after Telegram Login SDK success — exchanges idToken, then opens the game WebView
+     * with the token injected so the SPA unlocks only after auth.
+     */
+    suspend fun openGameAfterLogin(webView: WebView, idToken: String) {
+        val auth = exchangeNativeIdToken(idToken)
+        val escaped = JSONObject.quote(idToken)
+        withContext(Dispatchers.Main) {
+            webView.evaluateJavascript(
+                """
+                window.__NATIVE_ID_TOKEN__ = $escaped;
+                window.__NATIVE_PLATFORM__ = "android";
+                if (window.TelegramNativeAuth) {
+                  window.TelegramNativeAuth.submit($escaped, "android");
+                }
+                """.trimIndent(),
+                null,
+            )
+            webView.loadUrl(gameUrlWithToken(idToken))
+        }
+        // Prefer loading with query if WebView was empty — inject at document start via WebViewClient
+        // when possible; evaluateJavascript after loadUrl also works if bridge is installed.
+        Unit
+    }
+
+    /** Preferred: load URL with token so SPA bootstraps auth before showing game buttons. */
+    fun gameUrlWithToken(idToken: String): String {
+        val enc = java.net.URLEncoder.encode(idToken, Charsets.UTF_8.name())
+        return "$API_BASE/?native_id_token=$enc&platform=android"
+    }
 }

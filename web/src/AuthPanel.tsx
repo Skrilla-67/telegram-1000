@@ -9,6 +9,7 @@ import {
   pingMe,
   setSessionToken,
 } from "./api";
+import { bootstrapNativeAuth, installNativeAuthBridge } from "./nativeAuth";
 import type { GameHistoryItem, UserProfile } from "./types";
 
 declare global {
@@ -17,7 +18,11 @@ declare global {
   }
 }
 
-export function AuthPanel() {
+type Props = {
+  onAuthChange?: (user: UserProfile | null) => void;
+};
+
+export function AuthPanel({ onAuthChange }: Props) {
   const inTelegram = Boolean(window.Telegram?.WebApp?.initData);
   const [botUsername, setBotUsername] = useState("");
   const [botClientId, setBotClientId] = useState("");
@@ -25,6 +30,12 @@ export function AuthPanel() {
   const [history, setHistory] = useState<GameHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [booting, setBooting] = useState(true);
+
+  function applyProfile(user: UserProfile | null) {
+    setProfile(user);
+    onAuthChange?.(user);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -39,21 +50,41 @@ export function AuthPanel() {
   }, []);
 
   useEffect(() => {
+    const uninstall = installNativeAuthBridge(
+      (user) => {
+        applyProfile(user);
+        setError(null);
+      },
+      (message) => setError(message),
+    );
+
     void (async () => {
       try {
+        const nativeUser = await bootstrapNativeAuth();
+        if (nativeUser) {
+          applyProfile(nativeUser);
+          setError(null);
+          return;
+        }
         if (inTelegram || getSessionToken()) {
-          setProfile(await pingMe());
+          applyProfile(await pingMe());
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "auth error");
+      } finally {
+        setBooting(false);
       }
     })();
+
+    return uninstall;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inTelegram]);
 
   useEffect(() => {
     if (inTelegram) return;
+    if (booting) return;
     if (!botClientId && !botUsername) return;
-    if (getSessionToken()) return;
+    if (getSessionToken() || profile) return;
 
     window.onTelegramAuth = (data) => {
       void (async () => {
@@ -61,9 +92,9 @@ export function AuthPanel() {
           const payload = data as Record<string, unknown>;
           const res = payload.id_token
             ? await loginWithOidc(String(payload.id_token))
-            : await loginWithTelegramWidget(payload);
+            : await loginWithTelegramWidget(payload as Record<string, unknown>);
           setSessionToken(res.token);
-          setProfile(res.user);
+          applyProfile(res.user);
           setError(null);
           const mount = document.getElementById("tg-login-slot");
           if (mount) mount.innerHTML = "";
@@ -74,32 +105,37 @@ export function AuthPanel() {
     };
 
     const slot = document.getElementById("tg-login-slot");
-    if (!slot || slot.childElementCount > 0) return;
+    if (!slot) return;
 
-    if (botClientId) {
+    slot.innerHTML = "";
+    const loginName = botUsername.replace(/^@/, "");
+
+    if (loginName) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://telegram.org/js/telegram-widget.js?22";
+      script.setAttribute("data-telegram-login", loginName);
+      script.setAttribute("data-size", "large");
+      script.setAttribute("data-radius", "10");
+      script.setAttribute("data-onauth", "onTelegramAuth(user)");
+      script.setAttribute("data-request-access", "write");
+      slot.appendChild(script);
+    } else if (botClientId) {
       const script = document.createElement("script");
       script.async = true;
       script.src = "https://oauth.telegram.org/js/telegram-login.js?6";
       script.setAttribute("data-client-id", botClientId);
       script.setAttribute("data-onauth", "onTelegramAuth(data)");
-      script.setAttribute("data-request-access", "write phone");
-      slot.appendChild(script);
-    } else {
-      const script = document.createElement("script");
-      script.async = true;
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.setAttribute("data-telegram-login", botUsername);
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-radius", "10");
-      script.setAttribute("data-onauth", "onTelegramAuth(user)");
       script.setAttribute("data-request-access", "write");
       slot.appendChild(script);
     }
 
     return () => {
       window.onTelegramAuth = undefined;
+      slot.innerHTML = "";
     };
-  }, [botClientId, botUsername, inTelegram, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botClientId, botUsername, inTelegram, profile, booting]);
 
   async function loadHistory() {
     setShowHistory(true);
@@ -118,7 +154,7 @@ export function AuthPanel() {
       if (!granted) return;
       const phone = response?.responseUnsafe?.contact?.phone_number;
       void pingMe(phone ? { phone_number: phone } : undefined)
-        .then(setProfile)
+        .then(applyProfile)
         .catch(() => undefined);
     });
   }
@@ -127,13 +163,13 @@ export function AuthPanel() {
     const tg = window.Telegram?.WebApp;
     if (!tg?.requestWriteAccess) return;
     tg.requestWriteAccess(() => {
-      void pingMe().then(setProfile).catch(() => undefined);
+      void pingMe().then(applyProfile).catch(() => undefined);
     });
   }
 
   function logout() {
     setSessionToken(null);
-    setProfile(null);
+    applyProfile(null);
     setHistory([]);
   }
 
@@ -186,10 +222,11 @@ export function AuthPanel() {
               {history.length === 0 && <li className="muted">Пока пусто</li>}
               {history.map((h) => (
                 <li key={h.game_id}>
-                  <strong>{h.winner_name ?? "—"}</strong>
+                  <strong>{h.winner_name ?? "-"}</strong>
                   <span className="muted">
                     {" "}
-                    · {new Date(h.finished_at * 1000).toLocaleString()} · код {h.invite_code || "—"}
+                    · {new Date(h.finished_at * 1000).toLocaleString()} · код{" "}
+                    {h.invite_code || "-"}
                   </span>
                 </li>
               ))}
@@ -199,13 +236,26 @@ export function AuthPanel() {
       ) : (
         <div className="auth-card">
           <p className="auth-name">Вход через Telegram</p>
-          <p className="muted">Логин-виджет на сайте и полный доступ Mini App.</p>
-          {!inTelegram && <div id="tg-login-slot" className="tg-login-slot" />}
-          {inTelegram && (
+          <p className="muted">
+            {booting
+              ? "Проверяем авторизацию…"
+              : "Войдите, чтобы начать игру. На телефоне — нативный Login SDK, на сайте — виджет."}
+          </p>
+          {!booting && !botUsername && !botClientId && (
+            <p className="muted">Загружаем настройки бота…</p>
+          )}
+          {!booting && (botUsername || botClientId) && (
+            <p className="muted widget-hint">
+              Если кнопки нет: BotFather → /setdomain → домен сайта (например
+              telegram-1000-web.onrender.com).
+            </p>
+          )}
+          {!inTelegram && !booting && <div id="tg-login-slot" className="tg-login-slot" />}
+          {inTelegram && !booting && (
             <button
               type="button"
               className="btn btn--primary"
-              onClick={() => void fetchMe().then(setProfile)}
+              onClick={() => void fetchMe().then(applyProfile)}
             >
               Продолжить в Mini App
             </button>

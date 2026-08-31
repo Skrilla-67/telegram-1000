@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   createGame,
   currentUserId,
@@ -6,10 +6,12 @@ import {
   joinGame,
   sendAction,
   startGame,
+  getSessionToken,
 } from "./api";
 import { DiceTray } from "./Dice";
-import type { GameState, PlayerState } from "./types";
+import type { GameState, PlayerState, UserProfile } from "./types";
 import { AuthPanel } from "./AuthPanel";
+import { closeMiniApp, useTelegramMenuButtons } from "./telegramMenuButtons";
 
 type Mode = "menu" | "solo" | "create" | "join";
 
@@ -44,6 +46,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [rolling, setRolling] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [authedUser, setAuthedUser] = useState<UserProfile | null>(null);
+  const isAuthed = Boolean(
+    authedUser || window.Telegram?.WebApp?.initData || getSessionToken(),
+  );
+
 
   useEffect(() => {
     const tp = window.Telegram?.WebApp?.themeParams;
@@ -58,6 +65,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthed) return;
     const code = startParamCode();
     if (!code) return;
     setMode("join");
@@ -69,7 +77,7 @@ export default function App() {
         setError(e instanceof Error ? e.message : "Не удалось войти по ссылке");
       }
     })();
-  }, []);
+  }, [isAuthed]);
 
   useEffect(() => {
     if (!game) return;
@@ -184,6 +192,20 @@ export default function App() {
     }
   }
 
+
+  const quickPlay = useCallback(() => {
+    setError(null);
+    void createGame(3, 1)
+      .then(setGame)
+      .catch((e) => setError(e instanceof Error ? e.message : "Ошибка"));
+  }, []);
+
+  const bailOut = useCallback(() => {
+    closeMiniApp();
+  }, []);
+
+  useTelegramMenuButtons(isAuthed && !game && mode === "menu", quickPlay, bailOut);
+
   if (!game) {
     return (
       <div className="app">
@@ -193,15 +215,29 @@ export default function App() {
           <p className="lead">Играй с ботами или зови друзей в комнату.</p>
         </header>
 
-        <AuthPanel />
+        <AuthPanel onAuthChange={setAuthedUser} />
 
-        {mode === "menu" && (
+        {!isAuthed && (
+          <p className="muted auth-gate-hint">
+            Авторизуйтесь выше — игра откроется после входа (виджет или нативное приложение).
+          </p>
+        )}
+
+        {isAuthed && mode === "menu" && (
           <section className="lobby">
+            <div className="menu-actions">
+              <button type="button" className="btn btn--play" onClick={quickPlay}>
+                Го катку
+              </button>
+              <button type="button" className="btn btn--bail" onClick={bailOut}>
+                Слиться
+              </button>
+            </div>
             <button type="button" className="btn btn--primary" onClick={() => setMode("solo")}>
               Против ботов
             </button>
             <button type="button" className="btn btn--ghost" onClick={() => setMode("create")}>
-              Создать комнату
+              С друзьями
             </button>
             <button type="button" className="btn btn--ghost" onClick={() => setMode("join")}>
               Войти по коду
@@ -210,7 +246,7 @@ export default function App() {
           </section>
         )}
 
-        {mode === "solo" && (
+        {isAuthed && mode === "solo" && (
           <section className="lobby">
             <label className="lobby__label">
               Боты
@@ -237,7 +273,7 @@ export default function App() {
           </section>
         )}
 
-        {mode === "create" && (
+        {isAuthed && mode === "create" && (
           <section className="lobby">
             <label className="lobby__label">
               Мест для людей (включая вас)
@@ -270,7 +306,7 @@ export default function App() {
               </div>
             </label>
             <button type="button" className="btn btn--primary" onClick={createRoom}>
-              Создать
+              Создать комнату
             </button>
             <button type="button" className="linkish" onClick={() => setMode("menu")}>
               Назад
@@ -279,7 +315,7 @@ export default function App() {
           </section>
         )}
 
-        {mode === "join" && (
+        {isAuthed && mode === "join" && (
           <section className="lobby">
             <label className="lobby__label">
               Код комнаты

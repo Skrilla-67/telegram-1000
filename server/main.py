@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from .auth import TelegramUser, get_current_user, issue_session_token, validate_login_widget, validate_native_id_token, persist_user
 from .config import settings
+from . import runtime
 from .game.engine import GameEngine, create_game, join_game, start_game
 from .game.models import GameState, GameStatus
 from .store import store
@@ -159,7 +160,7 @@ class ClientMetaPayload(BaseModel):
 @app.get("/api/config")
 def public_config() -> dict:
     return {
-        "bot_username": settings.bot_username or "",
+        "bot_username": settings.bot_username or runtime.bot_username or "",
         "bot_client_id": bot_client_id(),
         "webapp_url": settings.webapp_url,
         "dev_mode": settings.dev_mode,

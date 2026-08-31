@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server.config import settings  # noqa: E402
+from server import runtime  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot")
@@ -84,6 +85,9 @@ async def run_bot() -> None:
         return
 
     bot = Bot(token=settings.bot_token)
+    me = await bot.get_me()
+    if me.username:
+        runtime.bot_username = me.username
     dp = build_dispatcher(bot)
     await bot.delete_webhook(drop_pending_updates=False)
     # Main Mini App / menu button — enable Main App also in BotFather.
