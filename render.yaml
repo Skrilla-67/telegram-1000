@@ -1,6 +1,7 @@
-# Render Blueprint for Dice 1000
-# https://render.com/docs/blueprint-spec
-# Bot polling runs inside the web service (no Background Worker needed).
+# Render Blueprint — ONE web service only.
+# Do NOT create another Web Service in the Dashboard (new name = new *.onrender.com URL).
+# Keep using this service; set WEBAPP_URL = Primary URL of THIS service, then Manual Deploy.
+# Suspend/delete any older copies (telegram-1000, telegram-1000-1, workers).
 services:
   - type: web
     name: telegram-1000-web

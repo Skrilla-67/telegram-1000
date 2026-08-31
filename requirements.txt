@@ -4,6 +4,5 @@ aiogram>=3.15.0
 pydantic>=2.10.0
 pydantic-settings>=2.6.0
 python-dotenv>=1.0.1
-httpx>=0.28.0
 pytest>=8.3.0
 PyJWT[crypto]>=2.10.0

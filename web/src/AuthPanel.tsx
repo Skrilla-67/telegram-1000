@@ -26,6 +26,7 @@ export function AuthPanel({ onAuthChange }: Props) {
   const inTelegram = Boolean(window.Telegram?.WebApp?.initData);
   const [botUsername, setBotUsername] = useState("");
   const [botClientId, setBotClientId] = useState("");
+  const [webappUrl, setWebappUrl] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [history, setHistory] = useState<GameHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -43,6 +44,7 @@ export function AuthPanel({ onAuthChange }: Props) {
         const cfg = await fetchConfig();
         setBotUsername(cfg.bot_username);
         setBotClientId(cfg.bot_client_id || "");
+        setWebappUrl(cfg.webapp_url || "");
       } catch {
         /* ignore */
       }
@@ -246,8 +248,11 @@ export function AuthPanel({ onAuthChange }: Props) {
           )}
           {!booting && (botUsername || botClientId) && (
             <p className="muted widget-hint">
-              Если кнопки нет: BotFather → /setdomain → домен сайта (например
-              telegram-1000-web.onrender.com).
+              Если кнопки нет: BotFather → /setdomain → домен{" "}
+              {webappUrl
+                ? webappUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")
+                : "вашего WEBAPP_URL"}
+              . Не создавайте второй сервис на Render — URL снова сменится.
             </p>
           )}
           {!inTelegram && !booting && <div id="tg-login-slot" className="tg-login-slot" />}

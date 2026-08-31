@@ -119,3 +119,11 @@ Mobile apps use official SDKs and exchange `idToken` (JWT) with this backend:
 Set `BOT_CLIENT_ID` from BotFather (numeric Client ID). Tokens are verified via Telegram JWKS ([docs](https://core.telegram.org/bots/telegram-login#validating-id-tokens)).
 
 See `mobile/ios/README.md` and `mobile/android/README.md`.
+
+## Один сервис Render
+
+Канонический URL: **https://telegram-1000-web.onrender.com** (сервис `telegram-1000-web`).
+
+Не создавайте второй Web Service — появится новый `*.onrender.com` и всё «поедет». Подробности: [DEPLOY.md](DEPLOY.md).
+
+Старые копии (`telegram-1000`, `telegram-1000-1`) — Suspend/Delete; работайте только с `telegram-1000-web` + Manual Deploy с ветки `master`.

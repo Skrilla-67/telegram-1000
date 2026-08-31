@@ -7,7 +7,7 @@ import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -117,14 +117,27 @@ def _maybe_archive(state: GameState) -> None:
             users.record_game_result(p.id, won=(p.id == state.winner_id))
 
 @app.get("/api/health")
-def health() -> dict:
+def health(request: Request) -> dict:
+    configured = (settings.webapp_url or "").rstrip("/")
+    host = request.url.hostname or ""
+    host_ok = True
+    if configured.startswith("http") and host:
+        try:
+            from urllib.parse import urlparse
+
+            expected = urlparse(configured).hostname or ""
+            host_ok = expected.lower() == host.lower()
+        except Exception:
+            host_ok = True
     return {
         "ok": True,
         "dev_mode": settings.dev_mode,
-        "bot_username": settings.bot_username or None,
+        "bot_username": settings.bot_username or runtime.bot_username or None,
         "webapp_url": settings.webapp_url,
         "web_dist": WEB_DIST.is_dir(),
         "web_index": (WEB_DIST / "index.html").is_file(),
+        "webapp_host_ok": host_ok,
+        "request_host": host,
     }
 
 
