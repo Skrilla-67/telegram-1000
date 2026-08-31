@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
@@ -9,8 +9,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse, Response\nfrom fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .auth import TelegramUser, get_current_user, issue_session_token, validate_login_widget, validate_native_id_token, persist_user
