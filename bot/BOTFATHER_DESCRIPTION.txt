@@ -1,0 +1,7 @@
+# Paste into BotFather /setdescription if you prefer manual edit (≤512 chars).
+# Rich formatting for the in-chat description is sent by the bot via /start (Rich Messages).
+
+Кости «1000» — Telegram Mini App.
+5 кубиков, цель 1000 очков: открытие с 50, ямы, болты, обгон, самосвал 555, бочка с 880.
+Партии против ботов или комната с друзьями. После партии — победы/поражения и месячный счёт в ₽.
+Нажми «Играть» или /start.
