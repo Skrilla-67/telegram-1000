@@ -1,0 +1,16 @@
+{
+  "name": "Кости 1000 — Telegram Mini App",
+  "user": "ubuntu",
+  "install": "bash scripts/cloud-agent-install.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": ".venv/bin/python -m server.main"
+    },
+    {
+      "name": "web",
+      "command": "cd web && npm run dev -- --host"
+    }
+  ],
+  "ports": [8000, 5173]
+}
