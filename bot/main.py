@@ -27,25 +27,17 @@ START_TEXT = (
     "Играй против ботов или создай комнату и зови друзей."
 )
 
-
 def webapp_keyboard(start_param: str | None = None):
     url = settings.webapp_url.rstrip("/")
     if start_param:
         sep = "&" if "?" in url else "?"
-        # Telegram Mini Apps also support t.me/bot/app?startapp=
-        # For WebAppInfo button, append hash/query the client can read via start_param
-        # when opened through Menu Button with startapp — here we use direct URL.
         url = f"{url}{sep}tgWebAppStartParam={quote(start_param)}"
     builder = InlineKeyboardBuilder()
     builder.button(text="Играть", web_app=WebAppInfo(url=url))
     return builder.as_markup()
 
 
-async def main() -> None:
-    if not settings.bot_token:
-        raise SystemExit("BOT_TOKEN is not set. Copy .env.example → .env")
-
-    bot = Bot(token=settings.bot_token)
+def build_dispatcher(bot: Bot) -> Dispatcher:
     dp = Dispatcher()
 
     @dp.message(CommandStart())
@@ -82,8 +74,26 @@ async def main() -> None:
             reply_markup=webapp_keyboard(),
         )
 
+    return dp
+
+
+async def run_bot() -> None:
+    """Long-polling loop; safe to run as a FastAPI background task."""
+    if not settings.bot_token:
+        logger.warning("BOT_TOKEN is not set; Telegram bot polling disabled")
+        return
+
+    bot = Bot(token=settings.bot_token)
+    dp = build_dispatcher(bot)
+    await bot.delete_webhook(drop_pending_updates=False)
     logger.info("Bot starting. WEBAPP_URL=%s", settings.webapp_url)
     await dp.start_polling(bot)
+
+
+async def main() -> None:
+    if not settings.bot_token:
+        raise SystemExit("BOT_TOKEN is not set. Copy .env.example -> .env")
+    await run_bot()
 
 
 if __name__ == "__main__":

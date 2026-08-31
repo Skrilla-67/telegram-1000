@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -14,7 +17,32 @@ from .game.engine import GameEngine, create_game, join_game, start_game
 from .game.models import GameState, GameStatus
 from .store import store
 
-app = FastAPI(title="Telegram 1000", version="1.1.0")
+logger = logging.getLogger("server")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    bot_task: asyncio.Task | None = None
+    if settings.bot_token:
+        from bot.main import run_bot
+
+        bot_task = asyncio.create_task(run_bot(), name="telegram-bot-polling")
+        logger.info("Started Telegram bot polling in background")
+    else:
+        logger.warning("BOT_TOKEN empty; bot polling not started")
+    try:
+        yield
+    finally:
+        if bot_task is not None:
+            bot_task.cancel()
+            try:
+                await bot_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Stopped Telegram bot polling")
+
+
+app = FastAPI(title="Telegram 1000", version="1.1.0", lifespan=lifespan)
 
 origins = (
     ["*"]
