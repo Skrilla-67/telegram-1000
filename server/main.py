@@ -115,7 +115,12 @@ def _ensure_web_dist() -> None:
     logger.warning("web/dist missing — building frontend at startup")
     env = os.environ.copy()
     env["SKIP_PIP"] = "1"
-    subprocess.run(["bash", str(script)], cwd=ROOT, check=True, env=env, timeout=900)
+    try:
+        subprocess.run(["bash", str(script)], cwd=ROOT, check=True, env=env, timeout=900)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        # A frontend build failure must not take down the API + bot webhook.
+        # The SPA routes already serve a graceful "build missing" page.
+        logger.error("Startup frontend build failed (%s); serving without web/dist", exc)
 
 
 
