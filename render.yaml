@@ -14,6 +14,8 @@ services:
     envVars:
       - key: DEV_MODE
         value: "false"
+      - key: BOT_MODE
+        value: "auto"
       - key: PYTHON_VERSION
         value: "3.12.10"
       - key: BOT_TOKEN

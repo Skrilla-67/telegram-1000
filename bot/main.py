@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import sys
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -131,19 +132,51 @@ async def configure_bot_profile(bot: Bot) -> None:
         logger.exception("Failed to update bot profile texts")
 
 
-async def run_bot() -> None:
-    """Long-polling loop; safe to run as a FastAPI background task."""
-    if not settings.bot_token:
-        logger.warning("BOT_TOKEN is not set; Telegram bot polling disabled")
-        return
+def create_bot() -> Bot:
+    return Bot(token=settings.bot_token)
 
-    bot = Bot(token=settings.bot_token)
+
+def resolve_bot_mode() -> str:
+    """Decide how the bot receives updates.
+
+    Explicit BOT_MODE wins. In ``auto`` we prefer webhooks whenever we run in
+    production behind a public https URL, and fall back to long polling for
+    local development. Webhooks avoid the ``getUpdates`` conflict that occurs
+    when two processes poll the same token (e.g. Render's zero-downtime deploy
+    overlap or a leftover duplicate service).
+    """
+    mode = (settings.bot_mode or "auto").strip().lower()
+    if mode in {"webhook", "polling", "off"}:
+        return mode
+    host = urlparse((settings.webapp_url or "").strip()).hostname or ""
+    is_public_https = (
+        settings.webapp_url.strip().lower().startswith("https://")
+        and host not in {"", "localhost", "127.0.0.1"}
+    )
+    if not settings.dev_mode and is_public_https:
+        return "webhook"
+    return "polling"
+
+
+def webhook_secret() -> str:
+    """Stable, unguessable path/secret-token derived from the bot token."""
+    digest = hashlib.sha256(f"{settings.bot_token}::tg-1000-webhook".encode()).hexdigest()
+    return digest[:48]
+
+
+def webhook_path() -> str:
+    return f"/api/telegram/{webhook_secret()}"
+
+
+def webhook_url() -> str:
+    return f"{settings.webapp_url.rstrip('/')}{webhook_path()}"
+
+
+async def _apply_bot_profile(bot: Bot) -> None:
     me = await bot.get_me()
     if me.username:
         runtime.bot_username = me.username
     await configure_bot_profile(bot)
-    dp = build_dispatcher(bot)
-    await bot.delete_webhook(drop_pending_updates=False)
     # Main Mini App / menu button — enable Main App also in BotFather.
     await bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
@@ -151,8 +184,41 @@ async def run_bot() -> None:
             web_app=WebAppInfo(url=settings.webapp_url.rstrip("/")),
         )
     )
-    logger.info("Bot starting. WEBAPP_URL=%s", settings.webapp_url)
-    await dp.start_polling(bot)
+
+
+async def setup_webhook(bot: Bot, dp: Dispatcher) -> str:
+    """Register a Telegram webhook so updates are pushed over HTTP.
+
+    Returns the secret token that guards the webhook endpoint.
+    """
+    await _apply_bot_profile(bot)
+    secret = webhook_secret()
+    url = webhook_url()
+    await bot.set_webhook(
+        url=url,
+        secret_token=secret,
+        drop_pending_updates=False,
+        allowed_updates=dp.resolve_used_update_types(),
+    )
+    logger.info("Bot webhook registered. url=%s", url)
+    return secret
+
+
+async def run_bot() -> None:
+    """Long-polling loop; safe to run as a FastAPI background task."""
+    if not settings.bot_token:
+        logger.warning("BOT_TOKEN is not set; Telegram bot polling disabled")
+        return
+
+    bot = create_bot()
+    dp = build_dispatcher(bot)
+    await _apply_bot_profile(bot)
+    await bot.delete_webhook(drop_pending_updates=False)
+    logger.info("Bot starting (long polling). WEBAPP_URL=%s", settings.webapp_url)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 
 async def main() -> None:
