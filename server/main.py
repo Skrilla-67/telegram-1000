@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
 import subprocess
@@ -29,14 +30,46 @@ logger = logging.getLogger("server")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ensure_web_dist()
+    app.state.bot = None
+    app.state.dispatcher = None
+    app.state.webhook_secret = None
+    app.state.bot_mode = "off"
     bot_task: asyncio.Task | None = None
-    if settings.bot_token:
-        from bot.main import run_bot
 
-        bot_task = asyncio.create_task(run_bot(), name="telegram-bot-polling")
-        logger.info("Started Telegram bot polling in background")
+    if settings.bot_token:
+        from bot.main import (
+            build_dispatcher,
+            create_bot,
+            resolve_bot_mode,
+            run_bot,
+            setup_webhook,
+        )
+
+        mode = resolve_bot_mode()
+        app.state.bot_mode = mode
+        if mode == "webhook":
+            # Telegram pushes updates over HTTP — no getUpdates, so overlapping
+            # deploys / duplicate instances no longer conflict.
+            bot = create_bot()
+            dp = build_dispatcher(bot)
+            try:
+                secret = await setup_webhook(bot, dp)
+                app.state.bot = bot
+                app.state.dispatcher = dp
+                app.state.webhook_secret = secret
+                logger.info("Telegram bot running in WEBHOOK mode")
+            except Exception:
+                logger.exception("Failed to set up webhook; bot disabled this run")
+                await bot.session.close()
+                app.state.bot_mode = "off"
+        elif mode == "polling":
+            bot_task = asyncio.create_task(run_bot(), name="telegram-bot-polling")
+            logger.info("Telegram bot running in POLLING mode")
+        else:
+            logger.info("Telegram bot disabled (BOT_MODE=off)")
     else:
-        logger.warning("BOT_TOKEN empty; bot polling not started")
+        logger.warning("BOT_TOKEN empty; bot not started")
+
     try:
         yield
     finally:
@@ -47,6 +80,8 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
             logger.info("Stopped Telegram bot polling")
+        if app.state.bot is not None:
+            await app.state.bot.session.close()
 
 
 app = FastAPI(title="Telegram 1000", version="1.1.0", lifespan=lifespan)
@@ -138,6 +173,7 @@ def health(request: Request) -> dict:
         "web_index": (WEB_DIST / "index.html").is_file(),
         "webapp_host_ok": host_ok,
         "request_host": host,
+        "bot_mode": getattr(request.app.state, "bot_mode", "off"),
     }
 
 
@@ -343,6 +379,27 @@ def game_action(
     store.save(new_state)
     _maybe_archive(new_state)
     return new_state
+
+
+@app.post("/api/telegram/{secret}")
+async def telegram_webhook(secret: str, request: Request) -> dict:
+    """Receive Telegram updates in webhook mode and feed them to aiogram."""
+    bot = getattr(request.app.state, "bot", None)
+    dp = getattr(request.app.state, "dispatcher", None)
+    expected = getattr(request.app.state, "webhook_secret", None)
+    if bot is None or dp is None or not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not (hmac.compare_digest(secret, expected) and hmac.compare_digest(header, expected)):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    from aiogram.types import Update
+
+    data = await request.json()
+    update = Update.model_validate(data, context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
 
 assets_dir = WEB_DIST / "assets"
